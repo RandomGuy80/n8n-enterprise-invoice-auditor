@@ -1,0 +1,122 @@
+{
+  "name": "00_global_error_handler",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "f7a2a06d-7feb-4df2-877a-823a443aecf2",
+      "name": "Error Trigger"
+    },
+    {
+      "parameters": {
+        "tableId": "failed_jobs",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "workflow_name",
+              "fieldValue": "={{ $json.workflow.name }}"
+            },
+            {
+              "fieldId": "execution_id",
+              "fieldValue": "={{ $json.execution.id }}"
+            },
+            {
+              "fieldId": "failed_node",
+              "fieldValue": "={{ $json.execution.lastNodeExecuted }}"
+            },
+            {
+              "fieldId": "error_message",
+              "fieldValue": "={{ $json.execution.error.message }}"
+            },
+            {
+              "fieldId": "payload",
+              "fieldValue": "={{ JSON.stringify($json) }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        224,
+        0
+      ],
+      "id": "c1b03455-5c4d-49c7-9b17-9a3756707c42",
+      "name": "Create a row",
+      "credentials": {
+        "supabaseApi": {
+          "id": "GMzm3ciU1g8RfzbT",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "YOUR_TELEGRAM_ADMIN_CHAT_ID",
+        "text": "=🚨 <b>CRITICAL WORKFLOW ERROR</b>\n\n<b>Воркфлоу:</b> {{ $('Error Trigger').first().json.workflow.name }} <b>Упавший узел:</b> <code>{{ $('Error Trigger').first().json.execution.lastNodeExecuted }}</code> <b>Ошибка:</b> <code>{{ $('Error Trigger').first().json.execution.error.message }}</code> <b>ID записи в DLQ:</b> <code>{{ $json.id }}</code>\n\n🔗 <a href=\"{{ $('Error Trigger').first().json.execution.url }}\">Открыть упавший запуск в n8n</a>",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML"
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        448,
+        0
+      ],
+      "id": "0ff14cf6-d33d-4d86-8abe-bb2f4bbb6601",
+      "name": "Send a text message",
+      "webhookId": "9f09bea6-5bdf-4f9d-8101-daa3ceb71cfe",
+      "credentials": {
+        "telegramApi": {
+          "id": "3Ru1j3KTDAjESmrs",
+          "name": "Telegram account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Create a row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create a row": {
+      "main": [
+        [
+          {
+            "node": "Send a text message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "8a365dc7-a71a-47f2-a4d9-b221dfa66093",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "your-n8n-instance-id"
+  },
+  "nodeGroups": [],
+  "id": "r8uSDYJTq0xNEWG5",
+  "tags": []
+}

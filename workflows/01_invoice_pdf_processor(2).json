@@ -1,0 +1,839 @@
+{
+  "name": "01_invoice_pdf_processor",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message",
+          "callback_query"
+        ],
+        "additionalFields": {
+          "download": false
+        }
+      },
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.5,
+      "position": [
+        -320,
+        0
+      ],
+      "id": "acfaa876-a307-465b-a62a-34e097df7dd2",
+      "name": "Telegram Trigger",
+      "webhookId": "2d9ae1c5-d82a-46ed-a9c2-f92dd5587159",
+      "credentials": {
+        "telegramApi": {
+          "id": "3Ru1j3KTDAjESmrs",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 4
+          },
+          "conditions": [
+            {
+              "id": "437aa4ea-3f0c-47a7-b7a4-fc4d01a8658b",
+              "leftValue": "={{ $json.message.document.file_unique_id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4,
+      "position": [
+        192,
+        16
+      ],
+      "id": "3b1bef31-88aa-4598-9cb3-c2b4bcdf7f0b",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "tableId": "processed_events",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "event_key",
+              "fieldValue": "={{ $('Telegram Trigger').first().json.message.document.file_unique_id }}"
+            },
+            {
+              "fieldId": "source",
+              "fieldValue": "telegram_pdf"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        448,
+        -96
+      ],
+      "id": "59ce46a6-142a-4430-a2ca-378e023d61db",
+      "name": "Create a row",
+      "credentials": {
+        "supabaseApi": {
+          "id": "GMzm3ciU1g8RfzbT",
+          "name": "Supabase account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.message.chat.id }}",
+        "text": "⚠️ Пожалуйста, отправьте счёт в формате PDF-документа.",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        448,
+        96
+      ],
+      "id": "31c89589-dab7-491f-8421-72f0535e1ccc",
+      "name": "Send a text message",
+      "webhookId": "4af90600-3fa0-4a18-b402-c6be156dceb3",
+      "credentials": {
+        "telegramApi": {
+          "id": "3Ru1j3KTDAjESmrs",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "pdf",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.2,
+      "position": [
+        736,
+        -96
+      ],
+      "id": "038e3c3e-88ed-4d47-92f4-097a36dadfc9",
+      "name": "Extract from File"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Проанализируй текст входящего PDF-счёта, вызови оба инструмента аудита (проверку прайс-листа и проверку бюджета) и верни итоговый результат строго в формате JSON.\n\nТекст счёта:\n{{ $('Extract from File').first().json.text }}\n\n",
+        "options": {
+          "systemMessage": "Ты — старший AI-аудитор закупок и финансового контроля.\nТвоя задача — извлечь структурированные данные из текста PDF-счёта и провести обязательную двухэтапную проверку через подключенные инструменты:\n\nПОРЯДОК ДЕЙСТВИЙ (СТРОГО):\n1. Извлеки из текста счёта: номер счёта (invoice_number), поставщика (vendor_name), валюту (currency), общую сумму (total_amount) и массив позиций line_items (каждый объект: sku, item_name, quantity, unit_price).\n2. ОБЯЗАТЕЛЬНО вызови инструмент `check_vendor_catalog`, передав ему `vendor_name` и `line_items`.\n3. ОБЯЗАТЕЛЬНО вызови инструмент `budget_compliance`, передав ему `total_amount` и полученный флаг `has_price_mismatch`.\n4. Выдай финальный ответ СТРОГО в формате чистого JSON (без Markdown-обёрток ```json) по следующей схеме:\n{\n  \"invoice_number\": \"строка\",\n  \"vendor_name\": \"строка\",\n  \"total_amount\": число,\n  \"currency\": \"RUB\",\n  \"line_items\": [{\"sku\": \"...\", \"item_name\": \"...\", \"quantity\": 1, \"unit_price\": 1000}],\n  \"audit_status\": \"passed | price_mismatch | over_budget\",\n  \"requires_human_approval\": true/false,\n  \"audit_notes\": \"подробный отчёт по позициям и лимитам\"\n}\n"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        1184,
+        -96
+      ],
+      "id": "9a5765bd-2a4f-4a84-8558-d173cf7f668c",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "=gpt-5.6-luna",
+          "mode": "id"
+        },
+        "responsesApiEnabled": false,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        1184,
+        80
+      ],
+      "id": "82763268-d36a-41fd-b7c2-aded328275ad",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "ZMAbaIQeeLgHlfKR",
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "description": "Проверяет позиции счёта (line_items) по прайс-листу поставщика (vendor_name) и выявляет завышение цен.",
+        "workflowId": {
+          "__rl": true,
+          "value": "91JJhzlQmeXIHxic",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/91JJhzlQmeXIHxic",
+          "cachedResultName": "tool_check_vendor_catalog"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "vendor_name": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('vendor_name', ``, 'string') }}",
+            "line_items": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('line_items', ``, 'string') }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "vendor_name",
+              "displayName": "vendor_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "line_items",
+              "displayName": "line_items",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        1264,
+        192
+      ],
+      "id": "c55fa1f0-2e90-4da8-80f7-eff60bdec958",
+      "name": "check_vendor_catalog"
+    },
+    {
+      "parameters": {
+        "description": "Проверяет лимит суммы счёта (total_amount) до 50000 RUB и наличие расхождения цен (has_price_mismatch).",
+        "workflowId": {
+          "__rl": true,
+          "value": "za0J5P5puJp3qHfY",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/za0J5P5puJp3qHfY",
+          "cachedResultName": "tool_budget_compliance"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "has_price_mismatch": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('has_price_mismatch', ``, 'boolean') }}",
+            "total_amount": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('total_amount', ``, 'number') }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "total_amount",
+              "displayName": "total_amount",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "number",
+              "removed": false
+            },
+            {
+              "id": "has_price_mismatch",
+              "displayName": "has_price_mismatch",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "boolean",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        1440,
+        192
+      ],
+      "id": "88538395-3370-46b2-bfbd-2423f3c782f9",
+      "name": "budget_compliance"
+    },
+    {
+      "parameters": {
+        "jsCode": "const rawOutput = $input.first().json.output || '{}';\nconst pdfText = $('Extract from File').first().json.text || '';\nconst chatId = $('Telegram Trigger').first().json.message.chat.id;\n\nlet parsed = {};\ntry {\n  const cleaned = rawOutput.replace(/```json|```/gi, '').trim();\n  parsed = JSON.parse(cleaned);\n} catch (e) {\n  throw new Error('Ошибка парсинга JSON от AI-аудитора: ' + rawOutput.slice(0, 150));\n}\n\nconst inputTokens = Math.ceil((pdfText.length + 1200) / 3);\nconst outputTokens = Math.ceil(rawOutput.length / 3);\nconst totalTokens = inputTokens + outputTokens;\nconst estimatedCostUsd = Number(((inputTokens * 0.00000014) + (outputTokens * 0.00000028)).toFixed(6));\n\nconst requiresHuman = Boolean(parsed.requires_human_approval);\n\nreturn [{\n  json: {\n    chat_id: chatId,\n    invoice_number: String(parsed.invoice_number || 'Б/Н'),\n    vendor_name: String(parsed.vendor_name || 'Неизвестный поставщик'),\n    total_amount: Number(parsed.total_amount || 0),\n    currency: String(parsed.currency || 'RUB'),\n    line_items: parsed.line_items || [],\n    audit_status: String(parsed.audit_status || 'passed'),\n    requires_human_approval: requiresHuman,\n    approval_status: requiresHuman ? 'pending' : 'auto_approved',\n    audit_notes: String(parsed.audit_notes || 'Проверка завершена'),\n    llm_tokens_used: totalTokens,\n    estimated_cost_usd: estimatedCostUsd\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1488,
+        -96
+      ],
+      "id": "53fc6953-48f1-4624-bb55-94a7a41cacf9",
+      "name": "Parse & Cost Audit"
+    },
+    {
+      "parameters": {
+        "tableId": "invoices_registry",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "invoice_number",
+              "fieldValue": "={{ $json.invoice_number }}"
+            },
+            {
+              "fieldId": "vendor_name",
+              "fieldValue": "={{ $json.vendor_name }}"
+            },
+            {
+              "fieldId": "total_amount",
+              "fieldValue": "={{ $json.total_amount }}"
+            },
+            {
+              "fieldId": "currency",
+              "fieldValue": "={{ $json.currency }}"
+            },
+            {
+              "fieldId": "line_items",
+              "fieldValue": "={{ JSON.stringify($json.line_items) }}"
+            },
+            {
+              "fieldId": "audit_status",
+              "fieldValue": "={{ $json.audit_status }}"
+            },
+            {
+              "fieldId": "audit_notes",
+              "fieldValue": "={{ $json.audit_notes }}"
+            },
+            {
+              "fieldId": "approval_status",
+              "fieldValue": "={{ $json.approval_status }}"
+            },
+            {
+              "fieldId": "llm_tokens_used",
+              "fieldValue": "={{ $json.llm_tokens_used }}"
+            },
+            {
+              "fieldId": "estimated_cost_usd",
+              "fieldValue": "={{ $json.estimated_cost_usd }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1712,
+        -96
+      ],
+      "id": "c1c38de7-99cc-4d6d-9cdc-d43ebac3ff76",
+      "name": "Create a row1",
+      "credentials": {
+        "supabaseApi": {
+          "id": "GMzm3ciU1g8RfzbT",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 4
+          },
+          "conditions": [
+            {
+              "id": "15f7a987-459e-4fbe-8788-4a02abfa85bc",
+              "leftValue": "={{ $('Parse & Cost Audit').first().json.requires_human_approval }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4,
+      "position": [
+        1936,
+        -96
+      ],
+      "id": "55e7daa3-66ad-4820-a96e-423aed98f532",
+      "name": "If1"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Parse & Cost Audit').first().json.chat_id }}",
+        "text": "=✅ <b>СЧЁТ АВТОМАТИЧЕСКИ ПРОВЕДЁН</b>\n\n<b>Поставщик:</b> {{ $json.vendor_name }}\n<b>Счёт №:</b> <code>{{ $json.invoice_number }}</code>\n<b>Сумма:</b> <b>{{ $json.total_amount }} {{ $json.currency }}</b>\n<b>Статус аудита:</b> Прайс-лист и лимиты соблюдены\n\n📋 <b>Отчёт AI-аудитора:</b> \n{{ $json.audit_notes }}  \n\n📊 <i>Расход AI: {{ $json.llm_tokens_used }} ток. (~${{ $json.estimated_cost_usd }})</i>",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML"
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2176,
+        -208
+      ],
+      "id": "2e06867e-3543-4d52-ae18-eb08a23fe5ec",
+      "name": "Send a text message1",
+      "webhookId": "e2bff2bc-0113-4f39-82a2-f4d279420fec",
+      "credentials": {
+        "telegramApi": {
+          "id": "3Ru1j3KTDAjESmrs",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Parse & Cost Audit').first().json.chat_id }}",
+        "text": "=🚨 <b>ТРЕБУЕТСЯ ОДОБРЕНИЕ ФИНДИРЕКТОРА (HITL)</b>\n\n<b>Поставщик:</b> {{ $json.vendor_name }}\n<b>Счёт №:</b> <code>{{ $json.invoice_number }}</code>\n<b>Сумма:</b> <b>{{ $json.total_amount }} {{ $json.currency }}</b>\n<b>Причина остановки:</b> <code>{{ $json.audit_status }}</code>\n\n🔍 <b>Выявленные расхождения:</b>\n{{ $json.audit_notes }}\n\n📊 <i>Расход AI: {{ $json.llm_tokens_used }} ток. (~${{ $json.estimated_cost_usd }})</i>",
+        "replyMarkup": "inlineKeyboard",
+        "inlineKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "✅ Утвердить оплату",
+                    "additionalFields": {
+                      "callback_data": "=app_{{ $json.id }}"
+                    }
+                  },
+                  {
+                    "text": "❌ Отклонить счёт",
+                    "additionalFields": {
+                      "callback_data": "=rej_{{ $json.id }}"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML"
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2176,
+        0
+      ],
+      "id": "51009a89-8620-43d6-b9f5-498485000ba2",
+      "name": "Send a text message2",
+      "webhookId": "18f186da-6e31-4f8a-ac00-b3c25f42b4b7",
+      "credentials": {
+        "telegramApi": {
+          "id": "3Ru1j3KTDAjESmrs",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "fileId": "={{ $('Telegram Trigger').first().json.message.document.file_id }}",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        592,
+        -96
+      ],
+      "id": "ab1c5795-1723-4147-b6d8-aa879750db3a",
+      "name": "Get a file",
+      "webhookId": "00487237-03e5-4555-a3b6-24397ac6239f",
+      "credentials": {
+        "telegramApi": {
+          "id": "3Ru1j3KTDAjESmrs",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 4
+          },
+          "conditions": [
+            {
+              "id": "b7e231c8-30f2-4cf7-bc5b-e7b929142c99",
+              "leftValue": "={{ $json.callback_query.id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4,
+      "position": [
+        -80,
+        0
+      ],
+      "id": "aa897fb3-e919-4046-b6b7-887d31f7b66b",
+      "name": "If2"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "JpBEudSrmfJdsRSj",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/JpBEudSrmfJdsRSj",
+          "cachedResultName": "02_invoice_approval_handler"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.4,
+      "position": [
+        208,
+        -256
+      ],
+      "id": "47b80696-abf8-426d-abbd-aef885bf763a",
+      "name": "Call '02_invoice_approval_handler'"
+    },
+    {
+      "parameters": {
+        "value": "={{ $json.text.trim() }}",
+        "dataPropertyName": "content_hash"
+      },
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 2,
+      "position": [
+        896,
+        -96
+      ],
+      "id": "abe81f5b-22e5-40d0-9ba9-a8bbba6f81a3",
+      "name": "Crypto"
+    },
+    {
+      "parameters": {
+        "tableId": "processed_events",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "event_key",
+              "fieldValue": "=hash_{{ $json.content_hash }}"
+            },
+            {
+              "fieldId": "source",
+              "fieldValue": "pdf_content_sha256"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1040,
+        -96
+      ],
+      "id": "c21404a9-d8a3-451b-bda0-d51afa335628",
+      "name": "Create a row2",
+      "credentials": {
+        "supabaseApi": {
+          "id": "GMzm3ciU1g8RfzbT",
+          "name": "Supabase account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').first().json.message.chat.id }}",
+        "text": "⚠️ <b>Дубликат документа!</b>\n\nЭтот счёт уже был загружен в систему ранее и находится в реестре. Повторная обработка заблокирована для защиты от двойной оплаты.\n",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML"
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1264,
+        400
+      ],
+      "id": "6205e7a6-ed15-484c-8254-9e9704f29b11",
+      "name": "Send a text message3",
+      "webhookId": "0410818c-d92e-46c0-9d75-be797f98db3f",
+      "credentials": {
+        "telegramApi": {
+          "id": "3Ru1j3KTDAjESmrs",
+          "name": "Telegram account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "If2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Create a row",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send a text message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create a row": {
+      "main": [
+        [
+          {
+            "node": "Get a file",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send a text message3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract from File": {
+      "main": [
+        [
+          {
+            "node": "Crypto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "check_vendor_catalog": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "budget_compliance": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Parse & Cost Audit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse & Cost Audit": {
+      "main": [
+        [
+          {
+            "node": "Create a row1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create a row1": {
+      "main": [
+        [
+          {
+            "node": "If1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If1": {
+      "main": [
+        [
+          {
+            "node": "Send a text message1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send a text message2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get a file": {
+      "main": [
+        [
+          {
+            "node": "Extract from File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If2": {
+      "main": [
+        [
+          {
+            "node": "Call '02_invoice_approval_handler'",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Crypto": {
+      "main": [
+        [
+          {
+            "node": "Create a row2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create a row2": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send a text message3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "errorWorkflow": "r8uSDYJTq0xNEWG5",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "versionId": "076f2241-5720-4fba-856b-4e06a49cd7b1",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "your-n8n-instance-id"
+  },
+  "nodeGroups": [],
+  "id": "bnSuA4yRNKRKr4CA",
+  "tags": []
+}

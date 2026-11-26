@@ -1,0 +1,289 @@
+{
+  "name": "02_invoice_approval_handler",
+  "nodes": [
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 4
+          },
+          "conditions": [
+            {
+              "id": "c5bf0b9c-01b5-47c3-b374-83c306b671ba",
+              "leftValue": "={{ $json.decision }}",
+              "rightValue": "app",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4,
+      "position": [
+        448,
+        0
+      ],
+      "id": "b1eb93ff-10a4-41df-bc1c-ad01fa5d7f9d",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "invoices_registry",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $('Parse Action').first().json.invoice_id }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "approval_status",
+              "fieldValue": "approved"
+            },
+            {
+              "fieldId": "approved_by",
+              "fieldValue": "={{ $('Parse Action').first().json.approver_name }}"
+            },
+            {
+              "fieldId": "updated_at",
+              "fieldValue": "={{ $now.toISO() }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        672,
+        -96
+      ],
+      "id": "eb19e988-fb3f-414b-a9be-e785c6de28dc",
+      "name": "Update a row",
+      "credentials": {
+        "supabaseApi": {
+          "id": "GMzm3ciU1g8RfzbT",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const cb = $input.first().json.callback_query;\nconst parts = (cb.data || '').split('_');\nreturn [{\n  json: {\n    decision: (parts.at(0) || '').trim(),\n    invoice_id: (parts.at(1) || '').trim(),\n    approver_name: cb.from.username ? `@${cb.from.username}` : cb.from.first_name,\n    chat_id: cb.message.chat.id,\n    message_id: cb.message.message_id\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        0
+      ],
+      "id": "ad942239-a6e6-46d6-8cad-24506b45d812",
+      "name": "Parse Action"
+    },
+    {
+      "parameters": {
+        "operation": "editMessageText",
+        "chatId": "={{ $('Parse Action').first().json.chat_id }}",
+        "messageId": "={{ $('Parse Action').first().json.message_id }}",
+        "text": "=✅ <b>ОПЛАТА СЧЁТА УТВЕРЖДЕНА</b>\n\n<b>Счёт №:</b> <code>{{ $json.invoice_number }}</code> ({{ $json.vendor_name }})\n<b>Сумма:</b> <b>{{ $json.total_amount }} {{ $json.currency }}</b>\n<b>Утвердил:</b> {{ $('Parse Action').first().json.approver_name }}\n",
+        "additionalFields": {
+          "parse_mode": "HTML"
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        896,
+        -96
+      ],
+      "id": "c74f557c-dfd0-475d-9620-e3b90919e7b8",
+      "name": "Edit a text message",
+      "webhookId": "7308adef-4fec-4f6f-a3b9-3a60f85b8e30",
+      "credentials": {
+        "telegramApi": {
+          "id": "3Ru1j3KTDAjESmrs",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "invoices_registry",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $('Parse Action').first().json.invoice_id }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "approval_status",
+              "fieldValue": "rejected"
+            },
+            {
+              "fieldId": "approved_by",
+              "fieldValue": "={{ $('Parse Action').first().json.approver_name }}"
+            },
+            {
+              "fieldId": "updated_at",
+              "fieldValue": "={{ $now.toISO() }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        672,
+        96
+      ],
+      "id": "55e5cc23-d98c-4625-bcb5-a8bd720cf49b",
+      "name": "Update a row1",
+      "credentials": {
+        "supabaseApi": {
+          "id": "GMzm3ciU1g8RfzbT",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "editMessageText",
+        "chatId": "={{ $('Parse Action').first().json.chat_id }}",
+        "messageId": "={{ $('Parse Action').first().json.message_id }}",
+        "text": "=❌ <b>СЧЁТ ОТКЛОНЁН ФИНАНСОВЫМ КОНТРОЛЕМ</b>\n\n<b>Счёт №:</b> <code>{{ $json.invoice_number }}</code> ({{ $json.vendor_name }})\n<b>Отклонил:</b> {{ $('Parse Action').first().json.approver_name }}\n\n",
+        "additionalFields": {
+          "parse_mode": "HTML"
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        896,
+        96
+      ],
+      "id": "1641ddf8-2e82-40b1-b78d-16d4cd01d799",
+      "name": "Edit a text message1",
+      "webhookId": "7308adef-4fec-4f6f-a3b9-3a60f85b8e30",
+      "credentials": {
+        "telegramApi": {
+          "id": "3Ru1j3KTDAjESmrs",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        32,
+        0
+      ],
+      "id": "44a005fe-6d05-4bf6-8300-cfdb9d722f10",
+      "name": "When Executed by Another Workflow"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Update a row",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Update a row1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Action": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update a row": {
+      "main": [
+        [
+          {
+            "node": "Edit a text message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update a row1": {
+      "main": [
+        [
+          {
+            "node": "Edit a text message1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Parse Action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "errorWorkflow": "r8uSDYJTq0xNEWG5",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "versionId": "d46b59f9-2449-4100-9e44-7564bf3df49b",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "your-n8n-instance-id"
+  },
+  "nodeGroups": [],
+  "id": "JpBEudSrmfJdsRSj",
+  "tags": []
+}
